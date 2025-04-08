@@ -7,45 +7,38 @@ const GetAll = async () => {
 
 const GetById = async (id) => {
     const db = await DbHelper.readDb()
-    const index = db.User.findIndex((user) => user.id === id)
-    if (index === -1) {
-        throw new Error("Not Found")
-    }
+    const index = db.User.findIndex(user => user.id === id)
+    if (index === -1) throw new Error("Not Found")
     return db.User[index]
 }
-const CreateUser = async (body) => {
-    const db = await DbHelper.readDb();
-    db.User.push(body);
-    await DbHelper.writeDb(db);
-    return body;
-}
-const putUser = async (id, body) => {
-    const db = await DbHelper.readDb();
-    const index = db.User.findIndex((user) => user.id === id);
-    if (index === -1) {
-        throw new Error("Not Found");
-    }
-    db.User[index] = { ...db.User[index], ...body };
-    await DbHelper.writeDb(db);
-    return db.User[index];
-}
-const DeleteUser = async (id) => {
-    const db = await DbHelper.readDb();
-    const index = db.User.findIndex((user) => user.id === id);
-    if (index === -1) {
-        throw new Error("Not Found");
-    }
-    const deletedUser = db.User.splice(index, 1);
-    await DbHelper.writeDb(db);
-    return deletedUser[0];
+
+const Create = async (user) => {
+    const db = await DbHelper.readDb()
+    user.id = db.User.length ? Math.max(...db.User.map(u => u.id || 0)) + 1 : 1
+    db.User.push(user)
+    await DbHelper.writeDb(db)
 }
 
+const Update = async (id, updatedUser) => {
+    const db = await DbHelper.readDb()
+    const index = db.User.findIndex(user => user.id === id)
+    if (index === -1) throw new Error("Not Found")
+    db.User[index] = { ...db.User[index], ...updatedUser }
+    await DbHelper.writeDb(db)
+}
 
+const Delete = async (id) => {
+    const db = await DbHelper.readDb()
+    const index = db.User.findIndex(user => user.id === id)
+    if (index === -1) throw new Error("Not Found")
+    db.User.splice(index, 1)
+    await DbHelper.writeDb(db)
+}
 
 export default {
     GetAll,
     GetById,
-    CreateUser,
-    putUser,
-    DeleteUser
+    Create,
+    Update,
+    Delete
 }

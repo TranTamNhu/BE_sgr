@@ -1,70 +1,59 @@
 import userService from "../services/user.service.js"
 
-const GetAll = async( req, res, next ) => {
+const GetAll = async (req, res, next) => {
     try {
         const users = await userService.GetAll()
-        return res.status(200).json({
-            data : users
-        })
+        return res.status(200).json({ data: users })
     } catch (error) {
-        next( error )
+        next(error)
     }
 }
 
-const GetById = async( req, res, next ) => {
+const GetById = async (req, res, next) => {
     try {
-        const id = parseInt( req.params.id )
-        const user = await userService.GetById( id )
-        return res.status(200).json({
-            data : user
-        })
+        const id = parseInt(req.params.id)
+        const user = await userService.GetById(id)
+        return res.status(200).json({ data: user })
     } catch (error) {
-        next( error )
+        next(error)
     }
 }
-const postUser = async (req, res, next) => {
+
+const Create = async (req, res, next) => {
     try {
-        const body = req.body;
-        const newUser = await userService.CreateUser(body);
-        return res.status(201).json({
-            message: "Created",
-            data: newUser
-        });
+        const newUser = req.body
+        await userService.Create(newUser)
+        return res.status(201).json("Created")
     } catch (error) {
-        next(error);
+        next(error)
     }
 }
-const putUser = async (req, res, next) => {
+
+const Update = async (req, res, next) => {
     try {
-        const id = parseInt(req.params.id);
-        const body = req.body;
-        const updatedUser = await userService.putUser(id, body);
-        return res.status(200).json({
-            message: "Success",
-            data: updatedUser
-        });
+        const id = parseInt(req.params.id)
+        const updatedUser = req.body
+        await userService.Update(id, updatedUser)
+        return res.status(200).json("Success")
     } catch (error) {
-        next(error);
+        next(error)
     }
 }
-const deleteUser = async (req, res, next) => {
+
+const Delete = async (req, res, next) => {
     try {
-        const id = parseInt(req.params.id);
-        const deletedUser = await userService.DeleteUser(id);
-        return res.status(200).json({
-            message: "Deleted",
-            data: deletedUser
-        });
+        const id = parseInt(req.params.id)
+        await userService.Delete(id)
+        return res.status(200).json("Success")
     } catch (error) {
-        next(error);
+        next(error)
     }
 }
-    
 
 export default {
     GetAll,
     GetById,
-    postUser,
-    putUser,
-    deleteUser
+    Create,
+    Update,
+    Delete
 }
