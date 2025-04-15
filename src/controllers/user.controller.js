@@ -1,5 +1,7 @@
 import userService from "../services/user.service.js"
 
+
+
 const GetAll = async (req, res, next) => {
     try {
         const users = await userService.GetAll()
