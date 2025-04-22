@@ -1,23 +1,23 @@
-export const ValidateUserId = async (req, res, next) => {
-    try {
-        const id = parseInt(req.params.id)
-        if (isNaN(id) || id <= 0) {
-            throw new Error("ID is invalid")
-        }
-        next()
-    } catch (error) {
-        next(error)
+import { ObjectId } from "mongodb";
+
+export const ValidateUserId = (req, res, next) => {
+    if (!ObjectId.isValid(req.params.id)) {
+        return next(new Error("ID is invalid"));
     }
+    next();
 }
 
-export const ValidateUserBody = async (req, res, next) => {
-    try {
-        const { name } = req.body
-        if (!name || typeof name !== "string" || name.trim() === "") {
-            throw new Error("Name is required and must be a non-empty string")
-        }
-        next()
-    } catch (error) {
-        next(error)
+export const ValidateUserBody = (req, res, next) => {
+    const { name, email, age, gender } = req.body;
+
+    if (!name || !email || !/\S+@\S+\.\S+/.test(email)) {
+        return next(new Error("Invalid name or email"));
     }
+    if (age && typeof age !== "number") {
+        return next(new Error("Age must be a number"));
+    }
+    if (gender && !["male", "female", "other"].includes(gender.toLowerCase())) {
+        return next(new Error("Invalid gender"));
+    }
+    next();
 }
