@@ -1,159 +1,173 @@
-import userService from "../services/user.service.js"
+import userService from "../services/user.service.js";
+import {mailService} from "../configs/sendMail.config.js";
+import jwt from "jsonwebtoken";
 
 class UserController {
-  async GetAll(req, res, next) {
+
+  async SendEmail(req, res, next) {
     try {
-      const users = await userService.GetAll()
-      return res.status(200).json({ data: users })
-    } catch (error) {
-      next(error)
+      const email = req.body.email;
+      
+      if (!email) {
+        return res.status(400).json({message: "Email is required"});
+      }
+
+      const mailOptions = {
+        emailFrom: process.env.EMAIL_FROM || "DucHuySGroup@gmail.com",
+        emailTo: email,
+        emailSubject: "Test Email",
+        emailText: "This is a test email",
+      }
+    
+      const result = await mailService.sendMail(mailOptions);
+      if(!result) {
+        return res.status(404).json({message: "Error sending email"});
+      }
+      console.log("result: ", result);
+      return res.status(200).json({message: "Email sent successfully", data: result});
+    } catch (err) {
+      next(err);
+      return res.status(500).json({message: "Error sending email", error: err.message});
     }
   }
 
+  async Login(req, res, next) {
+    try {
+      const {email, password} = req.body;
+      if (!email || !password) {
+        return res.status(400).json({message: "Email and password are required"});
+      }
+      console.log("controller: ", email, password);
+
+      const token = await userService.Login(email, password);
+      if (!token) {
+        return res.status(404).json({message: "Error logging in user at service"});
+      }
+      
+      return res.status(200).json({message: "Login successfully", data: token});
+    } catch (err) {
+      next(err);
+      return res.status(500).json({message: "Error logging in user", error: err.message});
+    }
+  }
+
+  async Register(req, res) {
+    try {
+      const {username, email, password} = req.body;
+      
+      if (!username || !email || !password) {
+        return res.status(400).json({message: "Username, email and password are required"});
+      }
+
+      const user = await userService.Register(username, email, password);
+      if (!user) {
+        return res.status(404).json({message: "Error registering user at service"});
+      }
+      return res.status(201).json({message: "User registered successfully", data: user});
+    } catch (err) {
+      return res.status(500).json({message: "Error registering user", error: err.message});
+    }
+  }
+
+  async GetAll(req, res, next) {
+    try {
+      const users = await userService.GetAll();
+      return res.status(200).json({ data: users });
+    } catch (error) {
+      next(error);
+    }
+  } 
+
   async GetById(req, res, next) {
     try {
-      const id = req.params.id
-      const user = await userService.GetById(id)
+      const id = req.params.id;
+      const user = await userService.GetById(id);
       if (!user) {
-        return res.status(404).json("Not Found")
+        return res.status(404).json({message: "User not found"});
       }
-      return res.status(200).json({ data: user })
+      return res.status(200).json({ data: user });
     } catch (error) {
-      next(error)
+      next(error);
     }
   }
 
   async Create(req, res, next) {
     try {
-      const body = req.body
-      const newUser = await userService.Create(body)
+      const body = req.body;
+      const newUser = await userService.Create(body);
       if (!newUser) {
-        return res.status(400).json("Bad Request")
+        return res.status(400).json({message: "Bad Request"});
       }
-      return res.status(201).json({ data: newUser })
+      return res.status(201).json({ data: newUser });
     } catch (error) {
-      next(error)
+      next(error);
     }
   }
 
   async Update(req, res, next) {
     try {
-      const id = req.params.id
-      const body = req.body
-      const updatedUser = await userService.Update(id, body)
+      const id = req.params.id;
+      const body = req.body;
+      const updatedUser = await userService.Update(id, body);
       if (!updatedUser) {
-        return res.status(404).json("Not Found")
+        return res.status(404).json({message: "User not found"});
       }
-      return res.status(200).json("Updated Successfully")
+      return res.status(200).json({message: "Updated Successfully", data: updatedUser});
     } catch (error) {
-      next(error)
+      next(error);
     }
   }
 
   async Delete(req, res, next) {
     try {
-      const id = req.params.id
-      const deleted = await userService.Delete(id)
+      const id = req.params.id;
+      const deleted = await userService.Delete(id);
       if (!deleted) {
-        return res.status(404).json("Not Found")
+        return res.status(404).json({message: "User not found"});
       }
-      return res.status(200).json("Deleted Successfully")
+      return res.status(200).json({message: "Deleted Successfully"});
     } catch (error) {
-      next(error)
+      next(error);
+    }
+  }
+
+  async ForgotPassword(req, res, next) {
+    try {
+      const email = req.body.email;
+      if (!email) {
+        return res.status(400).json({message: "Email is required"});
+      }
+      const result = await userService.ForgotPassword(email);
+      if (!result) {
+        return res.status(404).json({message: "Error sending email"});
+      }
+      return res.status(200).json({message: "OTP sent successfully to your email"});
+    } catch (error) {
+      next(error);
+      return res.status(500).json({message: "Error in forgot password process", error: error.message});
+    }
+  }
+
+  async ResetPassword(req, res, next) {
+    try {
+      const otp = req.body.otp;
+      const email = req.body.email;
+      const password = req.body.password;
+      
+      if (!otp || !email || !password) {
+        return res.status(400).json({message: "OTP, email and new password are required"});
+      }
+      
+      const result = await userService.ResetPassword(otp, email, password);
+      if (!result) {
+        return res.status(404).json({message: "Error resetting password"});
+      }
+      return res.status(200).json({message: "Password reset successfully"});
+    } catch (error) {
+      next(error);
+      return res.status(500).json({message: "Error resetting password", error: error.message});
     }
   }
 }
 
-export default new UserController()
-// import userService from "../services/user.service.js";
-
-// const GetAll = async (req, res, next) => {
-//     try {
-//         const users = await userService.GetAll();
-//         return res.status(200).json({ data: users });
-//     } catch (error) {
-//         next(error);
-//     }
-// }
-
-// const GetById = async (req, res, next) => {
-//     try {
-//         const id = req.params.id;
-//         const user = await userService.GetById(id);
-//         return res.status(200).json({ data: user });
-//     } catch (error) {
-//         next(error);
-//     }
-// }
-// const GetByField = async (req, res, next) => {
-//     try {
-//         const { field, value } = req.query;
-
-//         // ✅ Nếu không truyền field hoặc value thì gọi GetAll
-//         if (!field || !value) {
-//             const users = await userService.GetAll();
-//             return res.status(200).json({ data: users });
-//         }
-
-//         // ✅ Ngược lại, lọc theo field như bạn đã làm
-//         const users = await userService.GetByField(field, value);
-//         return res.status(200).json({ data: users });
-//     } catch (error) {
-//         next(error);
-//     }
-// };
-
-
-// const Create = async (req, res, next) => {
-//     try {
-//         const newUser = req.body;
-//         const createdUser = await userService.Post(newUser);
-//         return res.status(201).json({ data: createdUser });
-//     } catch (error) {
-//         next(error);
-//     }
-// }
-
-// const Update = async (req, res, next) => {
-//     try {
-//         const id = req.params.id;
-//         const updatedUser = req.body;
-
-//         // Log thông tin để kiểm tra
-//         console.log('Updating user with ID:', id);
-//         console.log('Updated user data:', updatedUser);
-
-//         // Gọi hàm PutById để cập nhật người dùng
-//         const result = await userService.PutById(id, updatedUser);
-        
-//         // Trả về kết quả thành công
-//         return res.status(200).json({ data: result });
-//     } catch (error) {
-//         // Log lỗi và chuyển sang middleware xử lý lỗi
-//         console.error('Error:', error.message);  // Log lỗi chi tiết
-//         next(error);
-//     }
-// }
-
-
-
-// const Delete = async (req, res, next) => {
-//     try {
-//         const id = req.params.id;
-//         console.log("🟡 Deleting user with ID:", id); // Thêm dòng này
-
-//         const deletedUser = await userService.DeleteById(id);
-//         return res.status(200).json({ data: deletedUser });
-//     } catch (error) {
-//         console.error("🔴 Delete error:", error.message); // Ghi log lỗi cụ thể
-//         next(error);
-//     }
-// }
-// export default {
-//     GetAll,
-//     GetById,
-//     Create,
-//     Update,
-//     Delete,
-//     GetByField
-// };
+export default new UserController();
