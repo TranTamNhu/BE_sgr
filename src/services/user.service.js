@@ -1,190 +1,208 @@
-import User from "../models/user.model.js";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
-import passUtil from "../util/passUtil.js";
-import { mailService } from "../configs/sendMail.config.js";
-import {RandomOTP, GetExpiredOtp} from "../util/otpUtil.js";
-
-class UserService {
-  constructor() {
-    this.user = User;
-  }
-
-  async Login(email, password){
+import User from '../models/user.model.js'
+import bcrypt from "bcryptjs"
+import { ObjectId } from 'mongodb'
+import jwt from "jsonwebtoken"
+import { mailService } from '../configs/sendMail.config.js'
+import { GetExpiredOtp, RandomOTP } from '../util/otpUtil.js'
+import { GetTimeNow,  GetCurrentDate} from '../util/dateUtil.js'
+class UserService{
+    constructor()
+    {
+        this.user = User
+    }
+    async ResetPassword(otp, email, newPassword) {
     try {
-      const existedUser = await this.user.findOne({email});
-      if(!existedUser){
-        throw new Error("User not found");
+        const user = await User.findOne({ 
+            email,
+            otp,
+            otpExpire: { $gt: GetTimeNow() } 
+        });
+
+        if (!user) {
+            return null; 
+        }
+
+        user.password = newPassword;
+        user.otp = undefined;
+        user.otpExpire = undefined;
+        
+        const updatedUser = await user.save();
+
+        await mailService.sendMail({
+            emailFrom: process.env.MAIL_FROM,
+            emailTo: email,
+            emailSubject: 'Password Reset Successful',
+            emailText: 'Your password has been successfully reset.'
+        });
+
+        return updatedUser;
+    } catch (error) {
+        throw error;
+        }
+    }
+    async ForgotPassword(email)
+    {
+      try
+      {
+        const user = await this.user.findOne({email})
+        if(!user)
+        {
+          throw new Error("User with " + email + " not found!");
+        }
+        const otp = RandomOTP();
+        const otpExpire = GetExpiredOtp();
+        const updatedUser = await this.user.findByIdAndUpdate(
+            user._id,
+            { 
+                otp: otp,
+                otpExpire: otpExpire 
+            },
+            { new: true } 
+        );
+        const mailOptions = {
+            emailFrom: "supabakaniga@gmail.com",
+            emailTo: email,
+            emailSubject: "Reset Password OTP",
+            emailText: `Your password reset OTP: ${otp}\nThis OTP will expire in 5 minutes.`
+        };
+
+        const result = await mailService.sendMail(mailOptions);
+        if(!result)
+        {
+            throw new Error("Error while reset pw: " + error.message);
+        }
+        return {
+            message: "OTP sent successfully",
+            userId: updatedUser._id,
+            otpExpiresAt: new Date(otpExpire)
+        };
       }
-      console.log("existedUser: ",existedUser);
-      const checkPass = await passUtil.compare(password, existedUser.password);
-      if(!checkPass){
-        throw new Error("Password does not match");
+      catch(error)
+      {
+        throw new Error("Error: " + error.message)
       }
-      console.log("checkPass: ",checkPass);
-
-      //neu dang nhap thanh cong, tra ve token
-      const accessToken = await jwt.sign({id: existedUser._id}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '10m'}); ;
-      const refreshToken = await jwt.sign({id: existedUser._id}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: '3d'}); ;
-      
-      console.log("accessToken: ", accessToken);
-      console.log("refreshToken: ", refreshToken);
-      
-      return {accessToken, refreshToken};
-    } catch (err) {
-      throw new Error("Error logging in user: " + err.message);
-    }
-  }
-
-  async Register(username, email, password) {
-    try{
-    const existedUser = await this.user.findOne({email});
-    console.log("existedUser: ",existedUser);
-    
-    if(existedUser){
-      throw new Error("User already exists");
     }
 
-    const hashedPass = await bcrypt.hash(password, 10);
-    if(!hashedPass){
-      throw new Error("Error hashing password");
+    async Login(data)
+    {
+        try
+        {
+            const user = await this.user.findOne({email: data.email})
+            console.log(user)
+            const isMatch = await bcrypt.compare(data.password, user.password);
+            console.log(data.password)
+            console.log(user.password)
+            console.log(isMatch)
+            if(!user || !isMatch)
+            {
+                throw new Error("Wrong email or password!");
+            }
+            const accessToken = jwt.sign({userId: user._id}, process.env.SECRET_KEY, {expiresIn: '30m'})
+            const refreshToken = jwt.sign({userId: user._id}, process.env.SECRET_KEY, {expiresIn: '3d'})
+            console.log(accessToken)
+            console.log(refreshToken)
+            return {accessToken, refreshToken}
+        }
+        catch(error)
+        {
+            throw new Error('Error while loginn!' + error.message);
+        }
     }
-
-    const newUser = new this.user({
-      username,
-      email,
-      password: hashedPass,
-    });
-    const savedUser = await newUser.save();
-    console.log("savedUser: ", newUser);
-    if(!savedUser){
-      throw new Error("Error saving user");
+    async Register(user)
+    {
+        try
+        {
+        const isExist = await this.user.findOne({email: user.email});
+        if(isExist)
+        {
+            throw new Error("User already exists")
+        }
+        const hashedPassword = await bcrypt.hash(user.password, 10);
+        console.log(hashedPassword)
+        const newUser = new this.user({
+            ...user,
+            password: hashedPassword,
+        });
+        const save = await newUser.save();
+        return save
+        }
+        catch(error)
+        {
+            throw new Error("Error while registering user!: " + error.message);
+        }
+    }  
+    async GetAll() {
+        try
+        {
+            return await this.user.find();
+        }
+        catch(error)
+        {
+            throw new Error('Error while getting users: ' + error.message)
+        }
     }
-    return savedUser;
-  }
-    catch(err){
-      throw new Error("Error registering user: " + err.message);
+  
+    async GetById(id) {
+        try
+        {
+            const user = await this.user.findById(id)
+            if(!user)
+            {
+                throw new Error("User not found")
+            }
+            return user
+        }
+        catch(error)
+        {
+            throw new Error("Error while find user by id: " + + error.message)
+        }
     }
-  }
-
-  async GetAll() {
-    try {
-      return await this.user.find({});
-    } catch (err) {
-      throw new Error("Error retrieving users: " + err.message);
+  
+    async Create(user) {
+        try
+        {
+            const newUser = new this.user(user)
+            return await newUser.save()
+        }
+        catch(error)
+        {
+            throw new Error("Error while create new user: " + error.message)
+        }
     }
-  }
-
-  async GetById(id) {
-    if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    try {
-      return await this.user.findById(id);
-    } catch (err) {
-      throw new Error("Error retrieving user: " + err.message);
+  
+    async Update(id, user) {
+        try
+        {
+            const updateUser = this.user.findByIdAndUpdate(
+                id,
+                user,
+                {new: true}
+            )
+            if(!updateUser)
+            {
+                throw new Error("User not found")
+            }
+            return updateUser;
+        }
+        catch(error)
+        {
+            throw new Error("Error while update user: " + + error.message)
+        }
     }
-  }
-
-  async Create(userData) {
-    try {
-      const newUser = new this.user(userData);
-      return await newUser.save();
-    } catch (err) {
-      throw new Error("Error creating user: " + err.message);
+  
+    async Delete(id) {
+        try{
+            const deleteUser = this.user.findByIdAndDelete(id)
+            if (!deleteUser) {
+                throw new Error('User not found')
+            }
+            return deleteUser
+        }
+        catch(error)
+        {
+            throw new Error('Error while delete user: ' + + error.message)
+        }
     }
-  }
-
-  async Update(id, updateData) {
-    if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    try {
-      const updatedUser = await this.user.findByIdAndUpdate(id, updateData, {
-        new: true,
-      });
-      if (!updatedUser) {
-        throw new Error("User not found");
-      }
-      return updatedUser;
-    } catch (err) {
-      throw new Error("Error updating user: " + err.message);
-    }
-  }
-
-  async Delete(id) {
-    if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    try {
-      const deletedUser = await this.user.findByIdAndDelete(id);
-      if (!deletedUser) {
-        throw new Error("User not found");
-      }
-      return deletedUser;
-    } catch (err) {
-      throw new Error("Error deleting user: " + err.message);
-    }
-  }
-  async ForgotPassword(email) {
-  try {
-    const existedUser = await this.user.findOne({email});
-    if(!existedUser){
-      throw new Error("User not registered yet");
-    }
-    
-    const otp = RandomOTP();
-    const otpExpire = GetExpiredOtp();
-
-    const updatedUser = await this.user.findByIdAndUpdate(existedUser._id, {
-      otp: otp, 
-      otpExpire: otpExpire
-    });
-
-    const mailOptions = {
-      emailFrom: process.env.EMAIL_FROM || "SGroupResetPassword@gmail.com",
-      emailTo: email,
-      emailSubject: "Reset Password",
-      emailText: `This is your otp: ${otp}. It will expire in 5 minutes. Please use it to reset your password. If you did not request this, please ignore this email.`,
-    }
-    
-    const result = await mailService.sendMail(mailOptions);
-    if(!result){
-      throw new Error("Error sending email");
-    }
-    console.log("result: ", result);
-    return result
-  } catch (err) {
-    throw new Error("Error sending forgot pass email: " + err.message);
-  }
 }
- async ResetPassword(otp, email, newPassword) {
-  try {
-    const user = await this.user.findOne({ email });
-    if (!user) {
-      throw new Error("User not found");
-    }
 
-   
-    if (user.otp !== otp) {
-      throw new Error("Invalid OTP");
-    }
-
-    // Check if OTP expired
-    const currentTime = new Date();
-    if (currentTime > user.otpExpire) {
-      throw new Error("OTP has expired");
-    }
-
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
-    user.otp = null;  
-    user.otpExpire = null;
-    
-    const updatedUser = await user.save();
-    if (!updatedUser) {
-      throw new Error("Error updating password");
-    }
-    return updatedUser;
-  } catch (err) {
-    throw new Error("Error reset pass: " + err.message);
-  }
-}}
-
-export default new UserService();
+export default new UserService()
